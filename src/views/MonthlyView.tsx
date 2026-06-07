@@ -85,7 +85,7 @@ export default function MonthlyView({ store, date, onDateChange }: Props) {
           {cells.map((d, i) => {
             if (!d) return <div key={i} className="min-h-[70px] border-r border-b border-gray-100 last:border-r-0" />;
             const ds = dateStr(d);
-            const items = store.getSchedulesForDate(d);
+            const items = store.getSchedulesForDate(d).filter(s => !s.routineId);
             const isToday = ds === todayStr;
             const isSelected = detailDate && dateStr(detailDate) === ds;
             const col = i % 7;

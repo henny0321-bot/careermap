@@ -24,7 +24,23 @@ export interface Schedule {
   createdAt: string;
 }
 
-export type ViewType = 'daily' | 'weekly' | 'monthly' | 'routines';
+export type ViewType = 'daily' | 'weekly' | 'monthly' | 'routines' | 'diet';
+
+export interface WeightEntry {
+  id: string;
+  date: string; // YYYY-MM-DD
+  weight: number; // kg
+  note?: string;
+}
+
+export interface MealEntry {
+  id: string;
+  date: string;
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  food: string;
+  calories?: number;
+  note?: string;
+}
 
 export const COLORS = [
   '#6366f1', // indigo

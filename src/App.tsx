@@ -5,12 +5,14 @@ import DailyView from './views/DailyView';
 import WeeklyView from './views/WeeklyView';
 import MonthlyView from './views/MonthlyView';
 import RoutinesView from './views/RoutinesView';
+import DietView from './views/DietView';
 
 const NAV_ITEMS: { view: ViewType; label: string; icon: string }[] = [
   { view: 'daily', label: '일간', icon: '📋' },
   { view: 'weekly', label: '주간', icon: '📅' },
   { view: 'monthly', label: '월간', icon: '🗓️' },
-  { view: 'routines', label: '루틴', icon: '🔄' },
+  { view: 'routines', label: '습관', icon: '✅' },
+  { view: 'diet', label: '건강', icon: '💪' },
 ];
 
 export default function App() {
@@ -31,10 +33,11 @@ export default function App() {
         {view === 'weekly' && <WeeklyView store={store} date={date} onDateChange={setDate} />}
         {view === 'monthly' && <MonthlyView store={store} date={date} onDateChange={setDate} />}
         {view === 'routines' && <RoutinesView store={store} />}
+        {view === 'diet' && <DietView store={store} />}
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 safe-area-inset-bottom">
-        <div className="max-w-2xl mx-auto grid grid-cols-4">
+        <div className="max-w-2xl mx-auto grid grid-cols-5">
           {NAV_ITEMS.map(({ view: v, label, icon }) => (
             <button
               key={v}

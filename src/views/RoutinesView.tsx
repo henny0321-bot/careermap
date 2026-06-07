@@ -8,18 +8,40 @@ interface Props {
   store: Store;
 }
 
-const REPEAT_LABELS: Record<string, string> = {
-  daily: '매일',
-  weekday: '평일 (월~금)',
-  weekend: '주말 (토~일)',
-  weekly: '특정 요일',
-};
+function dateStr(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
 
-const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+function shouldRepeatOnDate(routine: Routine, date: Date): boolean {
+  const day = date.getDay();
+  switch (routine.repeatType) {
+    case 'daily': return true;
+    case 'weekday': return day >= 1 && day <= 5;
+    case 'weekend': return day === 0 || day === 6;
+    case 'weekly': return (routine.repeatDays ?? []).includes(day);
+    default: return false;
+  }
+}
+
+const MONTH_NAMES = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
 
 export default function RoutinesView({ store }: Props) {
+  const today = new Date();
+  const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Routine | null>(null);
+
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayStr = dateStr(today);
+
+  function prevMonth() {
+    setViewDate(new Date(year, month - 1, 1));
+  }
+  function nextMonth() {
+    setViewDate(new Date(year, month + 1, 1));
+  }
 
   function handleSave(r: Routine) {
     if (editing) store.updateRoutine(r);
@@ -34,69 +56,159 @@ export default function RoutinesView({ store }: Props) {
     }
   }
 
+  function isCompletedOnDay(routine: Routine, day: number): boolean {
+    const d = new Date(year, month, day);
+    if (!shouldRepeatOnDate(routine, d)) return false;
+    const ds = dateStr(d);
+    const s = store.schedules.find(s => s.routineId === routine.id && s.date === ds);
+    return s?.completed ?? false;
+  }
+
+  function isScheduledOnDay(routine: Routine, day: number): boolean {
+    const d = new Date(year, month, day);
+    return shouldRepeatOnDate(routine, d);
+  }
+
+  function toggleDay(routine: Routine, day: number) {
+    const d = new Date(year, month, day);
+    const ds = dateStr(d);
+    store.ensureRoutineSchedule(routine.id, d);
+    const s = store.schedules.find(sc => sc.routineId === routine.id && sc.date === ds);
+    if (s) {
+      store.toggleComplete(s.id);
+    } else {
+      // after ensureRoutineSchedule, it will be created; toggle on next render cycle
+      // Use a synthetic id
+      store.toggleComplete(`${routine.id}-${ds}`);
+    }
+  }
+
+  function getMonthCompletionCount(routine: Routine): { done: number; total: number } {
+    let done = 0;
+    let total = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, month, d);
+      if (shouldRepeatOnDate(routine, date)) {
+        total++;
+        const ds = dateStr(date);
+        const s = store.schedules.find(sc => sc.routineId === routine.id && sc.date === ds);
+        if (s?.completed) done++;
+      }
+    }
+    return { done, total };
+  }
+
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
   return (
-    <div className="max-w-lg mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-lg font-bold text-gray-800">루틴 관리</h2>
-          <p className="text-xs text-gray-400 mt-0.5">반복 루틴을 설정하면 자동으로 일정에 표시됩니다</p>
+    <div className="max-w-full px-4 py-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6 max-w-2xl mx-auto">
+        <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 text-lg">‹</button>
+        <h2 className="font-bold text-gray-800 text-lg">{year}년 {MONTH_NAMES[month]} 습관 트래커</h2>
+        <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 text-lg">›</button>
+      </div>
+
+      {store.routines.length === 0 ? (
+        <div className="text-center py-16 text-gray-400 max-w-2xl mx-auto">
+          <p className="text-5xl mb-3">✅</p>
+          <p className="text-sm font-medium">루틴이 없습니다</p>
+          <p className="text-xs mt-1">아래 버튼을 눌러 루틴을 추가해보세요</p>
         </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="border-collapse min-w-max mx-auto">
+            <thead>
+              <tr>
+                <th className="text-left text-xs font-semibold text-gray-500 pr-3 pl-1 pb-2 min-w-[120px] sticky left-0 bg-gray-50 z-10">습관</th>
+                {days.map(d => {
+                  const ds = dateStr(new Date(year, month, d));
+                  const isToday = ds === todayStr;
+                  const dow = new Date(year, month, d).getDay();
+                  return (
+                    <th key={d} className={`text-center pb-2 w-7 ${isToday ? 'text-indigo-600 font-bold' : dow === 0 ? 'text-red-400' : dow === 6 ? 'text-blue-400' : 'text-gray-400'} text-xs font-medium`}>
+                      {d}
+                    </th>
+                  );
+                })}
+                <th className="text-center text-xs font-semibold text-gray-500 pl-3 pb-2 min-w-[50px]">달성</th>
+              </tr>
+            </thead>
+            <tbody>
+              {store.routines.map(routine => {
+                const { done, total } = getMonthCompletionCount(routine);
+                return (
+                  <tr key={routine.id} className="border-t border-gray-100">
+                    <td className="py-1.5 pr-3 pl-1 sticky left-0 bg-white z-10">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: routine.color }} />
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-medium text-gray-700 truncate max-w-[80px]">{routine.title}</span>
+                          <button
+                            onClick={() => { setEditing(routine); setShowForm(true); }}
+                            className="text-gray-300 hover:text-gray-500 text-xs leading-none"
+                            title="수정"
+                          >✏</button>
+                          <button
+                            onClick={() => handleDelete(routine.id)}
+                            className="text-gray-300 hover:text-red-400 text-xs leading-none"
+                            title="삭제"
+                          >✕</button>
+                        </div>
+                      </div>
+                    </td>
+                    {days.map(d => {
+                      const scheduled = isScheduledOnDay(routine, d);
+                      const completed = isCompletedOnDay(routine, d);
+                      const ds = dateStr(new Date(year, month, d));
+                      const isToday = ds === todayStr;
+                      const isPast = ds <= todayStr;
+
+                      if (!scheduled) {
+                        return <td key={d} className="w-7 h-7 text-center py-1" />;
+                      }
+
+                      return (
+                        <td key={d} className="w-7 text-center py-1">
+                          <button
+                            onClick={() => isPast ? toggleDay(routine, d) : undefined}
+                            disabled={!isPast}
+                            className={`w-6 h-6 rounded-full mx-auto flex items-center justify-center transition-all ${
+                              completed
+                                ? 'opacity-100'
+                                : isToday
+                                ? 'border-2 border-dashed opacity-60'
+                                : isPast
+                                ? 'border border-gray-200 opacity-40'
+                                : 'border border-gray-100 opacity-20'
+                            } ${isPast ? 'cursor-pointer hover:scale-110' : 'cursor-default'}`}
+                            style={completed ? { backgroundColor: routine.color } : { borderColor: routine.color }}
+                            title={completed ? '완료' : '미완료'}
+                          />
+                        </td>
+                      );
+                    })}
+                    <td className="pl-3 text-center">
+                      <span className="text-xs text-gray-500 font-medium whitespace-nowrap">
+                        {done}<span className="text-gray-300">/{total}</span>
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="mt-6 flex justify-center">
         <button
           onClick={() => { setEditing(null); setShowForm(true); }}
-          className="px-4 py-2 bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-600"
+          className="px-5 py-2.5 bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-600 shadow-sm"
         >
           + 루틴 추가
         </button>
       </div>
-
-      {store.routines.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          <p className="text-5xl mb-3">🔄</p>
-          <p className="text-sm font-medium">루틴이 없습니다</p>
-          <p className="text-xs mt-1">매일 반복되는 루틴을 등록해보세요</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {store.routines.map(r => (
-            <div key={r.id} className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="w-3 h-3 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: r.color }} />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-800">{r.title}</p>
-                  {r.description && <p className="text-xs text-gray-500 mt-0.5">{r.description}</p>}
-                  <div className="flex items-center gap-3 mt-2 flex-wrap">
-                    <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                      🔄 {REPEAT_LABELS[r.repeatType]}
-                      {r.repeatType === 'weekly' && r.repeatDays && r.repeatDays.length > 0 && (
-                        <span>: {r.repeatDays.sort().map(d => DAY_LABELS[d]).join(', ')}</span>
-                      )}
-                    </span>
-                    {r.time && (
-                      <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                        ⏰ {r.time}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-1 flex-shrink-0">
-                  <button
-                    onClick={() => { setEditing(r); setShowForm(true); }}
-                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => handleDelete(r.id)}
-                    className="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {showForm && (
         <Modal title={editing ? '루틴 수정' : '루틴 추가'} onClose={() => { setShowForm(false); setEditing(null); }}>

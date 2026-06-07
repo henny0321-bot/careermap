@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Routine, Schedule } from '../types';
+import type { Routine, Schedule, WeightEntry, MealEntry } from '../types';
 
 const ROUTINES_KEY = 'scheduleapp_routines';
 const SCHEDULES_KEY = 'scheduleapp_schedules';
+const WEIGHTS_KEY = 'scheduleapp_weights';
+const MEALS_KEY = 'scheduleapp_meals';
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -35,9 +37,13 @@ function shouldRepeatOnDate(routine: Routine, date: Date): boolean {
 export function useStore() {
   const [routines, setRoutines] = useState<Routine[]>(() => load(ROUTINES_KEY, []));
   const [schedules, setSchedules] = useState<Schedule[]>(() => load(SCHEDULES_KEY, []));
+  const [weights, setWeights] = useState<WeightEntry[]>(() => load(WEIGHTS_KEY, []));
+  const [meals, setMeals] = useState<MealEntry[]>(() => load(MEALS_KEY, []));
 
   useEffect(() => { save(ROUTINES_KEY, routines); }, [routines]);
   useEffect(() => { save(SCHEDULES_KEY, schedules); }, [schedules]);
+  useEffect(() => { save(WEIGHTS_KEY, weights); }, [weights]);
+  useEffect(() => { save(MEALS_KEY, meals); }, [meals]);
 
   const addRoutine = useCallback((routine: Routine) => {
     setRoutines(prev => [...prev, routine]);
@@ -118,9 +124,35 @@ export function useStore() {
     }
   }, [schedules, routines]);
 
+  const addWeight = useCallback((entry: WeightEntry) => {
+    setWeights(prev => [...prev, entry]);
+  }, []);
+
+  const updateWeight = useCallback((updated: WeightEntry) => {
+    setWeights(prev => prev.map(w => w.id === updated.id ? updated : w));
+  }, []);
+
+  const deleteWeight = useCallback((id: string) => {
+    setWeights(prev => prev.filter(w => w.id !== id));
+  }, []);
+
+  const addMeal = useCallback((entry: MealEntry) => {
+    setMeals(prev => [...prev, entry]);
+  }, []);
+
+  const updateMeal = useCallback((updated: MealEntry) => {
+    setMeals(prev => prev.map(m => m.id === updated.id ? updated : m));
+  }, []);
+
+  const deleteMeal = useCallback((id: string) => {
+    setMeals(prev => prev.filter(m => m.id !== id));
+  }, []);
+
   return {
     routines,
     schedules,
+    weights,
+    meals,
     addRoutine,
     updateRoutine,
     deleteRoutine,
@@ -130,6 +162,12 @@ export function useStore() {
     toggleComplete,
     getSchedulesForDate,
     ensureRoutineSchedule,
+    addWeight,
+    updateWeight,
+    deleteWeight,
+    addMeal,
+    updateMeal,
+    deleteMeal,
   };
 }
 
