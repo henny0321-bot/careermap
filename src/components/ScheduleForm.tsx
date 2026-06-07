@@ -60,6 +60,7 @@ export default function ScheduleForm({ date, initial, onSave, onCancel }: Props)
           <label className="block text-sm font-medium text-gray-700 mb-1">시작 시간</label>
           <input
             type="time"
+            step="60"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             value={startTime}
             onChange={e => setStartTime(e.target.value)}
@@ -69,6 +70,7 @@ export default function ScheduleForm({ date, initial, onSave, onCancel }: Props)
           <label className="block text-sm font-medium text-gray-700 mb-1">종료 시간</label>
           <input
             type="time"
+            step="60"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             value={endTime}
             onChange={e => setEndTime(e.target.value)}
