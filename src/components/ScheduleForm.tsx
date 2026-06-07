@@ -15,6 +15,7 @@ export default function ScheduleForm({ date, initial, onSave, onCancel }: Props)
   const [description, setDescription] = useState(initial?.description ?? '');
   const [startTime, setStartTime] = useState(initial?.startTime ?? '');
   const [endTime, setEndTime] = useState(initial?.endTime ?? '');
+  const [alarm, setAlarm] = useState(initial?.alarm ?? '');
   const [color, setColor] = useState(initial?.color ?? COLORS[0]);
 
   function handleSubmit(e: React.FormEvent) {
@@ -27,6 +28,7 @@ export default function ScheduleForm({ date, initial, onSave, onCancel }: Props)
       date,
       startTime: startTime || undefined,
       endTime: endTime || undefined,
+      alarm: alarm || undefined,
       color,
       completed: initial?.completed ?? false,
       createdAt: initial?.createdAt ?? new Date().toISOString(),
@@ -76,6 +78,26 @@ export default function ScheduleForm({ date, initial, onSave, onCancel }: Props)
             onChange={e => setEndTime(e.target.value)}
           />
         </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          알람 <span className="text-gray-400 font-normal text-xs">(선택)</span>
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            type="time"
+            step="60"
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            value={alarm}
+            onChange={e => setAlarm(e.target.value)}
+          />
+          {alarm && (
+            <button type="button" onClick={() => setAlarm('')} className="text-gray-400 hover:text-gray-600 text-sm px-2">✕</button>
+          )}
+        </div>
+        {alarm && startTime && alarm > startTime && (
+          <p className="text-xs text-orange-500 mt-1">알람이 시작 시간 이후로 설정되어 있습니다</p>
+        )}
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">색상</label>

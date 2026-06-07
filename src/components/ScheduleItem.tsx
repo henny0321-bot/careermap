@@ -29,6 +29,7 @@ export default function ScheduleItem({ schedule, onToggle, onEdit, onDelete }: P
             {schedule.startTime && (
               <p className="text-xs text-gray-500">
                 {schedule.startTime}{schedule.endTime ? ` ~ ${schedule.endTime}` : ''}
+                {schedule.alarm && <span className="ml-1.5">⏰ {schedule.alarm}</span>}
               </p>
             )}
             {schedule.description && <p className="text-xs text-gray-500 truncate">{schedule.description}</p>}

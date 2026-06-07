@@ -18,6 +18,7 @@ export interface Schedule {
   date: string; // YYYY-MM-DD
   startTime?: string;
   endTime?: string;
+  alarm?: string; // HH:MM — alarm time (same as or before startTime)
   color: string;
   routineId?: string; // if generated from a routine
   completed: boolean;

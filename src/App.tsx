@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { ViewType } from './types';
 import { useStore } from './store/useStore';
+import { useAlarm } from './store/useAlarm';
 import DailyView from './views/DailyView';
 import WeeklyView from './views/WeeklyView';
 import MonthlyView from './views/MonthlyView';
@@ -18,7 +19,20 @@ const NAV_ITEMS: { view: ViewType; label: string; icon: string }[] = [
 export default function App() {
   const [view, setView] = useState<ViewType>('daily');
   const [date, setDate] = useState(new Date());
+  const [notifDenied, setNotifDenied] = useState(false);
   const store = useStore();
+  useAlarm(store);
+
+  useEffect(() => {
+    if ('Notification' in window) {
+      if (Notification.permission === 'denied') setNotifDenied(true);
+      else if (Notification.permission === 'default') {
+        Notification.requestPermission().then(p => {
+          if (p === 'denied') setNotifDenied(true);
+        });
+      }
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -26,6 +40,12 @@ export default function App() {
         <div className="max-w-2xl mx-auto px-4 py-3">
           <h1 className="text-xl font-bold text-indigo-600">📆 내 스케줄</h1>
         </div>
+        {notifDenied && (
+          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between max-w-2xl mx-auto">
+            <p className="text-xs text-amber-700">🔕 알람을 받으려면 브라우저 알림 권한을 허용해 주세요</p>
+            <button onClick={() => setNotifDenied(false)} className="text-amber-500 text-xs ml-2">✕</button>
+          </div>
+        )}
       </header>
 
       <main className="flex-1 pb-20">
