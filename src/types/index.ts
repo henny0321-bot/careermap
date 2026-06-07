@@ -1,0 +1,38 @@
+export type RepeatType = 'daily' | 'weekday' | 'weekend' | 'weekly' | 'none';
+
+export interface Routine {
+  id: string;
+  title: string;
+  description?: string;
+  time?: string;
+  repeatType: RepeatType;
+  repeatDays?: number[]; // 0=Sun, 1=Mon, ..., 6=Sat (for weekly)
+  color: string;
+  createdAt: string;
+}
+
+export interface Schedule {
+  id: string;
+  title: string;
+  description?: string;
+  date: string; // YYYY-MM-DD
+  startTime?: string;
+  endTime?: string;
+  color: string;
+  routineId?: string; // if generated from a routine
+  completed: boolean;
+  createdAt: string;
+}
+
+export type ViewType = 'daily' | 'weekly' | 'monthly' | 'routines';
+
+export const COLORS = [
+  '#6366f1', // indigo
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#f97316', // orange
+  '#eab308', // yellow
+  '#22c55e', // green
+  '#06b6d4', // cyan
+  '#3b82f6', // blue
+];
