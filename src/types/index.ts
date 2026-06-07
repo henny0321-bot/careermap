@@ -42,6 +42,22 @@ export interface MealEntry {
   note?: string;
 }
 
+export interface TimetableBlock {
+  id: string;
+  date: string;       // YYYY-MM-DD
+  hour: number;       // 0-23
+  tenMin: number;     // 0-5 (×10 = minutes: 0,10,20,30,40,50)
+  type: 'plan' | 'actual';
+  color: string;
+  activityId?: string;
+}
+
+export interface Activity {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export const COLORS = [
   '#6366f1', // indigo
   '#8b5cf6', // violet

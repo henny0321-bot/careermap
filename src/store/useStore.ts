@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Routine, Schedule, WeightEntry, MealEntry } from '../types';
+import type { Routine, Schedule, WeightEntry, MealEntry, TimetableBlock, Activity } from '../types';
 
 const ROUTINES_KEY = 'scheduleapp_routines';
 const SCHEDULES_KEY = 'scheduleapp_schedules';
 const WEIGHTS_KEY = 'scheduleapp_weights';
 const MEALS_KEY = 'scheduleapp_meals';
+const TIMETABLE_KEY = 'scheduleapp_timetable';
+const ACTIVITIES_KEY = 'scheduleapp_activities';
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -39,11 +41,20 @@ export function useStore() {
   const [schedules, setSchedules] = useState<Schedule[]>(() => load(SCHEDULES_KEY, []));
   const [weights, setWeights] = useState<WeightEntry[]>(() => load(WEIGHTS_KEY, []));
   const [meals, setMeals] = useState<MealEntry[]>(() => load(MEALS_KEY, []));
+  const [timetableBlocks, setTimetableBlocks] = useState<TimetableBlock[]>(() => load(TIMETABLE_KEY, []));
+  const [activities, setActivities] = useState<Activity[]>(() => load(ACTIVITIES_KEY, [
+    { id: 'act-1', name: '공부', color: '#6366f1' },
+    { id: 'act-2', name: '운동', color: '#22c55e' },
+    { id: 'act-3', name: '휴식', color: '#f97316' },
+    { id: 'act-4', name: '식사', color: '#eab308' },
+  ]));
 
   useEffect(() => { save(ROUTINES_KEY, routines); }, [routines]);
   useEffect(() => { save(SCHEDULES_KEY, schedules); }, [schedules]);
   useEffect(() => { save(WEIGHTS_KEY, weights); }, [weights]);
   useEffect(() => { save(MEALS_KEY, meals); }, [meals]);
+  useEffect(() => { save(TIMETABLE_KEY, timetableBlocks); }, [timetableBlocks]);
+  useEffect(() => { save(ACTIVITIES_KEY, activities); }, [activities]);
 
   const addRoutine = useCallback((routine: Routine) => {
     setRoutines(prev => [...prev, routine]);
@@ -124,6 +135,33 @@ export function useStore() {
     }
   }, [schedules, routines]);
 
+  const setTimetableBlock = useCallback((block: TimetableBlock) => {
+    setTimetableBlocks(prev => {
+      const filtered = prev.filter(b => !(b.date === block.date && b.hour === block.hour && b.tenMin === block.tenMin && b.type === block.type));
+      return [...filtered, block];
+    });
+  }, []);
+
+  const clearTimetableBlock = useCallback((date: string, hour: number, tenMin: number, type: 'plan' | 'actual') => {
+    setTimetableBlocks(prev => prev.filter(b => !(b.date === date && b.hour === hour && b.tenMin === tenMin && b.type === type)));
+  }, []);
+
+  const getTimetableForDate = useCallback((date: string) => {
+    return timetableBlocks.filter(b => b.date === date);
+  }, [timetableBlocks]);
+
+  const addActivity = useCallback((a: Activity) => {
+    setActivities(prev => [...prev, a]);
+  }, []);
+
+  const updateActivity = useCallback((updated: Activity) => {
+    setActivities(prev => prev.map(a => a.id === updated.id ? updated : a));
+  }, []);
+
+  const deleteActivity = useCallback((id: string) => {
+    setActivities(prev => prev.filter(a => a.id !== id));
+  }, []);
+
   const addWeight = useCallback((entry: WeightEntry) => {
     setWeights(prev => [...prev, entry]);
   }, []);
@@ -153,6 +191,14 @@ export function useStore() {
     schedules,
     weights,
     meals,
+    timetableBlocks,
+    activities,
+    setTimetableBlock,
+    clearTimetableBlock,
+    getTimetableForDate,
+    addActivity,
+    updateActivity,
+    deleteActivity,
     addRoutine,
     updateRoutine,
     deleteRoutine,
