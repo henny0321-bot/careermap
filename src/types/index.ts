@@ -18,9 +18,10 @@ export interface Schedule {
   date: string; // YYYY-MM-DD
   startTime?: string;
   endTime?: string;
-  alarm?: string; // HH:MM — alarm time (same as or before startTime)
+  alarm?: string;
+  scheduleType?: 'plan' | 'actual'; // default = 'plan'
   color: string;
-  routineId?: string; // if generated from a routine
+  routineId?: string;
   completed: boolean;
   createdAt: string;
 }

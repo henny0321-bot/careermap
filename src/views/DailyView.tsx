@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import type { Activity, TimetableBlock } from '../types';
+import { useState, useRef } from 'react';
+import type { Schedule } from '../types';
 import type { Store } from '../store/useStore';
 import Modal from '../components/Modal';
+import ScheduleForm from '../components/ScheduleForm';
 
 interface Props {
   store: Store;
@@ -9,10 +10,12 @@ interface Props {
   onDateChange: (d: Date) => void;
 }
 
+// Layout constants — compact enough to see ~16h on a phone
+const HOUR_HEIGHT = 44; // px per hour
 const START_HOUR = 5;
-const END_HOUR = 25; // 01:00 next day
-const HOURS = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => (START_HOUR + i) % 24);
-const TEN_MINS = [0, 1, 2, 3, 4, 5]; // ×10 min
+const END_HOUR = 25; // renders up to 01:00 next day
+const TOTAL_HOURS = END_HOUR - START_HOUR;
+const LABEL_W = 44; // px for hour label column
 
 function dateStr(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -22,344 +25,303 @@ function formatDate(d: Date) {
   return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
 }
 
-function pad(n: number) {
-  return String(n).padStart(2, '0');
+function timeToMinutes(t: string) {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function minutesToPx(min: number) {
+  return ((min - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+}
+
+function pxToTime(px: number): string {
+  const totalMin = Math.round(((px / HOUR_HEIGHT) * 60 + START_HOUR * 60) / 10) * 10;
+  const h = Math.floor(totalMin / 60) % 24;
+  const m = totalMin % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 type Mode = 'plan' | 'actual' | 'compare';
-type Tool = 'paint' | 'erase';
 
-function computeStats(blocks: TimetableBlock[], date: string) {
-  const plan = blocks.filter(b => b.date === date && b.type === 'plan');
-  const actual = blocks.filter(b => b.date === date && b.type === 'actual');
-  const planMin = plan.length * 10;
-  const actualMin = actual.length * 10;
+interface Block {
+  schedule: Schedule;
+  top: number;
+  height: number;
+  col: number;
+  cols: number;
+}
 
-  // per activity
-  const byActivity: Record<string, { name: string; color: string; plan: number; actual: number }> = {};
-  [...plan, ...actual].forEach(b => {
-    const key = b.activityId ?? b.color;
-    if (!byActivity[key]) byActivity[key] = { name: '', color: b.color, plan: 0, actual: 0 };
-    byActivity[key][b.type] += 10;
+function layout(items: Schedule[], type: 'plan' | 'actual'): Block[] {
+  const filtered = items
+    .filter(s => (s.scheduleType ?? 'plan') === type && s.startTime)
+    .map(s => ({
+      schedule: s,
+      start: timeToMinutes(s.startTime!),
+      end: s.endTime ? timeToMinutes(s.endTime) : timeToMinutes(s.startTime!) + 60,
+    }))
+    .sort((a, b) => a.start - b.start);
+
+  const cols: number[] = [];
+  return filtered.map(item => {
+    let col = cols.findIndex(end => end <= item.start);
+    if (col === -1) { col = cols.length; cols.push(item.end); }
+    else cols[col] = item.end;
+    return {
+      schedule: item.schedule,
+      top: minutesToPx(item.start),
+      height: Math.max(minutesToPx(item.end) - minutesToPx(item.start), 22),
+      col,
+      cols: 0,
+    };
+  }).map((b, _, arr) => {
+    // count overlapping columns
+    const s = timeToMinutes(b.schedule.startTime!);
+    const e = b.schedule.endTime ? timeToMinutes(b.schedule.endTime) : s + 60;
+    const maxCol = arr.reduce((m, x) => {
+      const xs = timeToMinutes(x.schedule.startTime!);
+      const xe = x.schedule.endTime ? timeToMinutes(x.schedule.endTime) : xs + 60;
+      return (xs < e && xe > s) ? Math.max(m, x.col) : m;
+    }, b.col);
+    return { ...b, cols: maxCol + 1 };
   });
-
-  return { planMin, actualMin, byActivity };
 }
 
 export default function DailyView({ store, date, onDateChange }: Props) {
   const [mode, setMode] = useState<Mode>('plan');
-  const [tool, setTool] = useState<Tool>('paint');
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(store.activities[0] ?? null);
-  const [painting, setPainting] = useState(false);
-  const [showActivityModal, setShowActivityModal] = useState(false);
-  const [newActName, setNewActName] = useState('');
-  const [newActColor, setNewActColor] = useState('#6366f1');
-  const [showStats, setShowStats] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<Schedule | null>(null);
+  const [defaultTime, setDefaultTime] = useState('');
+  const [defaultType, setDefaultType] = useState<'plan' | 'actual'>('plan');
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const ds = dateStr(date);
-  const blocks = store.getTimetableForDate(ds);
-  const stats = computeStats(blocks, ds);
+  const all = store.getSchedulesForDate(date);
+  const routineItems = all.filter(s => s.routineId);
+  const planBlocks = layout(all.filter(s => !s.routineId), 'plan');
+  const actualBlocks = layout(all.filter(s => !s.routineId), 'actual');
 
-  // Keep selectedActivity in sync if activities change
-  useEffect(() => {
-    if (!selectedActivity && store.activities.length > 0) {
-      setSelectedActivity(store.activities[0]);
-    }
-  }, [store.activities, selectedActivity]);
+  const isToday = ds === dateStr(new Date());
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  const nowTop = minutesToPx(nowMin);
+  const showNow = isToday && nowMin >= START_HOUR * 60 && nowMin < END_HOUR * 60;
 
   function prevDay() { const d = new Date(date); d.setDate(d.getDate() - 1); onDateChange(d); }
   function nextDay() { const d = new Date(date); d.setDate(d.getDate() + 1); onDateChange(d); }
-  function goToday() { onDateChange(new Date()); }
 
-  const paintCell = useCallback((hour: number, tenMin: number) => {
-    const type = mode === 'compare' ? 'plan' : mode;
-    if (tool === 'erase') {
-      store.clearTimetableBlock(ds, hour, tenMin, 'plan');
-      store.clearTimetableBlock(ds, hour, tenMin, 'actual');
-      return;
-    }
-    if (!selectedActivity) return;
-    const block: TimetableBlock = {
-      id: `${ds}-${hour}-${tenMin}-${type}`,
-      date: ds,
-      hour,
-      tenMin,
-      type,
-      color: selectedActivity.color,
-      activityId: selectedActivity.id,
-    };
-    store.setTimetableBlock(block);
-  }, [ds, mode, tool, selectedActivity, store]);
-
-  function handleCellMouseDown(hour: number, tenMin: number) {
-    setPainting(true);
-    paintCell(hour, tenMin);
+  function handleGridClick(e: React.MouseEvent<HTMLDivElement>) {
+    if ((e.target as HTMLElement).closest('.schedule-block')) return;
+    const rect = gridRef.current!.getBoundingClientRect();
+    const scrollTop = gridRef.current!.closest('.overflow-y-auto')?.scrollTop ?? 0;
+    const y = e.clientY - rect.top + scrollTop;
+    setDefaultTime(pxToTime(y));
+    setDefaultType(mode === 'actual' ? 'actual' : 'plan');
+    setEditing(null);
+    setShowForm(true);
   }
 
-  function handleCellMouseEnter(hour: number, tenMin: number) {
-    if (painting) paintCell(hour, tenMin);
+  function handleEdit(s: Schedule) {
+    if (s.routineId) store.ensureRoutineSchedule(s.routineId, date);
+    setEditing(s);
+    setShowForm(true);
   }
 
-  useEffect(() => {
-    const up = () => setPainting(false);
-    window.addEventListener('mouseup', up);
-    window.addEventListener('touchend', up);
-    return () => { window.removeEventListener('mouseup', up); window.removeEventListener('touchend', up); };
-  }, []);
-
-  function getBlockAt(hour: number, tenMin: number, type: 'plan' | 'actual') {
-    return blocks.find(b => b.hour === hour && b.tenMin === tenMin && b.type === type);
+  function handleSave(s: Schedule) {
+    if (editing) store.updateSchedule(s);
+    else store.addSchedule(s);
+    setShowForm(false);
+    setEditing(null);
   }
 
-  function fmtMin(min: number) {
-    const h = Math.floor(min / 60);
-    const m = min % 60;
-    return h > 0 ? `${h}시간${m > 0 ? ` ${m}분` : ''}` : `${m}분`;
+  function handleDelete(id: string) {
+    if (confirm('삭제하시겠습니까?')) { store.deleteSchedule(id); setShowForm(false); }
   }
 
-  function addActivity() {
-    if (!newActName.trim()) return;
-    const a: Activity = { id: `act-${Date.now()}`, name: newActName.trim(), color: newActColor };
-    store.addActivity(a);
-    setSelectedActivity(a);
-    setNewActName('');
-    setShowActivityModal(false);
+  function renderBlock(b: Block, side?: 'left' | 'right') {
+    const s = b.schedule;
+    const W = side ? '50%' : `${100 / b.cols}%`;
+    const L = side === 'right' ? '50%' : side === 'left' ? '0' : `${(b.col / b.cols) * 100}%`;
+    return (
+      <div
+        key={s.id + (side ?? '')}
+        className="schedule-block absolute rounded overflow-hidden cursor-pointer border border-white/40 hover:brightness-95 transition-all"
+        style={{
+          top: b.top + 1,
+          height: b.height - 2,
+          left: `calc(${L} + 2px)`,
+          width: `calc(${W} - 4px)`,
+          backgroundColor: side === 'right' ? s.color + 'bb' : s.color,
+          opacity: s.completed ? 0.5 : 1,
+        }}
+        onClick={e => { e.stopPropagation(); handleEdit(s); }}
+      >
+        <div className="px-1 py-0.5 flex items-start gap-1 h-full">
+          <button
+            className="mt-0.5 w-3 h-3 rounded-full border border-white/70 flex-shrink-0"
+            style={{ backgroundColor: s.completed ? 'rgba(255,255,255,0.5)' : 'transparent' }}
+            onClick={e => {
+              e.stopPropagation();
+              if (s.routineId) store.ensureRoutineSchedule(s.routineId, date);
+              store.toggleComplete(s.id);
+            }}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-white text-xs font-medium leading-tight truncate">{s.title}</p>
+            {b.height >= 32 && s.startTime && (
+              <p className="text-white/75 text-xs leading-tight">{s.startTime}{s.endTime ? `–${s.endTime}` : ''}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  const isToday = ds === dateStr(new Date());
+  const planMin = planBlocks.reduce((sum, b) => {
+    const s = timeToMinutes(b.schedule.startTime!);
+    const e = b.schedule.endTime ? timeToMinutes(b.schedule.endTime) : s + 60;
+    return sum + (e - s);
+  }, 0);
+  const actualMin = actualBlocks.reduce((sum, b) => {
+    const s = timeToMinutes(b.schedule.startTime!);
+    const e = b.schedule.endTime ? timeToMinutes(b.schedule.endTime) : s + 60;
+    return sum + (e - s);
+  }, 0);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-56px-56px)] bg-gray-50">
+    <div className="flex flex-col h-[calc(100vh-56px-56px)]">
       {/* Header */}
       <div className="flex-shrink-0 bg-white border-b border-gray-200 px-3 py-2 space-y-2">
-        {/* Date nav */}
         <div className="flex items-center justify-between">
-          <button onClick={prevDay} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 text-xl leading-none">‹</button>
+          <button onClick={prevDay} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 text-xl">‹</button>
           <div className="text-center">
             <span className="font-semibold text-gray-800 text-sm">{formatDate(date)}</span>
             {!isToday && (
-              <button onClick={goToday} className="ml-2 text-xs text-indigo-500 hover:underline">오늘</button>
+              <button onClick={() => onDateChange(new Date())} className="ml-2 text-xs text-indigo-500">오늘</button>
             )}
           </div>
-          <button onClick={nextDay} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 text-xl leading-none">›</button>
+          <button onClick={nextDay} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 text-xl">›</button>
         </div>
 
         {/* Mode tabs */}
         <div className="flex rounded-lg bg-gray-100 p-0.5 gap-0.5">
           {(['plan', 'actual', 'compare'] as Mode[]).map(m => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`flex-1 py-1 text-xs font-medium rounded-md transition-colors ${mode === m ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
-            >
+            <button key={m} onClick={() => setMode(m)}
+              className={`flex-1 py-1 text-xs font-medium rounded-md transition-colors ${mode === m ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}>
               {m === 'plan' ? '계획' : m === 'actual' ? '실제' : '비교'}
             </button>
           ))}
         </div>
 
-        {/* Activity palette + tools */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-          {/* erase tool */}
-          <button
-            onClick={() => setTool(tool === 'erase' ? 'paint' : 'erase')}
-            className={`flex-shrink-0 px-2 py-1 rounded-lg text-xs border transition-colors ${tool === 'erase' ? 'bg-red-100 border-red-400 text-red-600' : 'bg-white border-gray-300 text-gray-500'}`}
-          >
-            🧹
-          </button>
+        {/* Summary */}
+        {(planMin > 0 || actualMin > 0) && (
+          <div className="flex gap-4 text-xs text-gray-500 px-1">
+            {planMin > 0 && <span>📋 계획 <strong className="text-gray-700">{Math.floor(planMin/60) > 0 ? `${Math.floor(planMin/60)}h ` : ''}{planMin%60 > 0 ? `${planMin%60}m` : ''}</strong></span>}
+            {actualMin > 0 && <span>✅ 실제 <strong className="text-gray-700">{Math.floor(actualMin/60) > 0 ? `${Math.floor(actualMin/60)}h ` : ''}{actualMin%60 > 0 ? `${actualMin%60}m` : ''}</strong></span>}
+            {planMin > 0 && actualMin > 0 && (
+              <span className={actualMin >= planMin ? 'text-green-600 font-medium' : 'text-orange-500 font-medium'}>
+                {Math.round(actualMin / planMin * 100)}%
+              </span>
+            )}
+          </div>
+        )}
 
-          {store.activities.map(a => (
-            <button
-              key={a.id}
-              onClick={() => { setSelectedActivity(a); setTool('paint'); }}
-              className={`flex-shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition-all ${selectedActivity?.id === a.id && tool === 'paint' ? 'border-gray-800 shadow-sm scale-105' : 'border-transparent'}`}
-              style={{ backgroundColor: a.color + '22' }}
-            >
-              <span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: a.color }} />
-              <span className="text-gray-700">{a.name}</span>
-            </button>
-          ))}
-
-          <button
-            onClick={() => setShowActivityModal(true)}
-            className="flex-shrink-0 px-2 py-1 rounded-lg text-xs border border-dashed border-gray-300 text-gray-400 hover:border-indigo-400 hover:text-indigo-400"
-          >
-            + 활동
-          </button>
-
-          <button
-            onClick={() => setShowStats(!showStats)}
-            className="flex-shrink-0 ml-auto px-2 py-1 rounded-lg text-xs border border-gray-200 text-gray-500 hover:border-indigo-300"
-          >
-            📊
-          </button>
-        </div>
-
-        {/* Stats panel */}
-        {showStats && (
-          <div className="bg-gray-50 rounded-lg p-2 text-xs space-y-1">
-            <div className="flex gap-4 text-gray-600">
-              <span>📋 계획 <strong>{fmtMin(stats.planMin)}</strong></span>
-              <span>✅ 실제 <strong>{fmtMin(stats.actualMin)}</strong></span>
-              {stats.planMin > 0 && (
-                <span>달성률 <strong className={stats.actualMin >= stats.planMin ? 'text-green-600' : 'text-orange-500'}>
-                  {Math.round((stats.actualMin / stats.planMin) * 100)}%
-                </strong></span>
-              )}
-            </div>
-            {Object.entries(stats.byActivity).map(([key, v]) => (
-              <div key={key} className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: v.color }} />
-                <span className="text-gray-600 w-12 truncate">{store.activities.find(a => a.id === key)?.name ?? '기타'}</span>
-                <span className="text-gray-500">계획 {fmtMin(v.plan)}</span>
-                <span className="text-gray-500">실제 {fmtMin(v.actual)}</span>
-                {v.plan > 0 && (
-                  <span className={v.actual >= v.plan ? 'text-green-500' : 'text-orange-400'}>
-                    {v.actual >= v.plan ? '✓' : `−${fmtMin(v.plan - v.actual)}`}
-                  </span>
-                )}
-              </div>
+        {/* Routine chips (종일) */}
+        {routineItems.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {routineItems.map(r => (
+              <button key={r.id}
+                onClick={() => handleEdit(r)}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-xs"
+                style={{ backgroundColor: r.color, opacity: r.completed ? 0.5 : 1 }}
+              >
+                <span
+                  onClick={e => { e.stopPropagation(); if (r.routineId) store.ensureRoutineSchedule(r.routineId, date); store.toggleComplete(r.id); }}
+                  className={`w-2.5 h-2.5 rounded-full border border-white/60 inline-block ${r.completed ? 'bg-white/50' : ''}`}
+                />
+                <span className={r.completed ? 'line-through' : ''}>{r.title}</span>
+              </button>
             ))}
           </div>
         )}
       </div>
 
-      {/* Timetable grid */}
-      <div className="flex-1 overflow-auto" ref={containerRef}>
-        <div className="select-none" style={{ minWidth: 200 }}>
-          {/* Column header */}
-          <div className="flex sticky top-0 bg-white z-10 border-b border-gray-200">
-            <div className="w-10 flex-shrink-0" />
-            {TEN_MINS.map(m => (
-              <div key={m} className="flex-1 text-center text-xs text-gray-400 py-1 border-l border-gray-100">
-                {m === 0 ? '00' : m * 10}
+      {/* Timetable */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="flex">
+          {/* Hour labels */}
+          <div className="flex-shrink-0 bg-white sticky left-0 z-10" style={{ width: LABEL_W }}>
+            {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => i).map(i => (
+              <div key={i} className="relative" style={{ height: i === TOTAL_HOURS ? 0 : HOUR_HEIGHT }}>
+                <span className="absolute -top-2 right-2 text-xs text-gray-400 leading-none font-mono select-none">
+                  {i < TOTAL_HOURS ? String((START_HOUR + i) % 24).padStart(2, '0') : ''}
+                </span>
               </div>
             ))}
           </div>
 
-          {/* Hour rows */}
-          {HOURS.map((hour, rowIdx) => {
-            const displayHour = `${pad(hour)}`;
-            return (
-              <div key={rowIdx} className="flex border-b border-gray-100" style={{ height: 32 }}>
-                {/* Hour label */}
-                <div className="w-10 flex-shrink-0 flex items-center justify-end pr-1.5 text-xs text-gray-400 font-mono border-r border-gray-200 bg-white sticky left-0">
-                  {displayHour}
-                </div>
+          {/* Grid */}
+          <div
+            ref={gridRef}
+            className="flex-1 relative cursor-pointer border-l border-gray-200"
+            style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}
+            onClick={handleGridClick}
+          >
+            {/* Hour lines */}
+            {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => (
+              <div key={i} className="absolute left-0 right-0 border-t border-gray-200" style={{ top: i * HOUR_HEIGHT }} />
+            ))}
+            {/* 30-min lines */}
+            {Array.from({ length: TOTAL_HOURS }, (_, i) => (
+              <div key={`h${i}`} className="absolute left-0 right-0 border-t border-gray-100 border-dashed" style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 }} />
+            ))}
 
-                {/* 10-min cells */}
-                {TEN_MINS.map(tenMin => {
-                  const planBlock = getBlockAt(hour, tenMin, 'plan');
-                  const actualBlock = getBlockAt(hour, tenMin, 'actual');
-
-                  return (
-                    <div
-                      key={tenMin}
-                      className="flex-1 border-l border-gray-100 relative cursor-crosshair overflow-hidden"
-                      onMouseDown={() => handleCellMouseDown(hour, tenMin)}
-                      onMouseEnter={() => handleCellMouseEnter(hour, tenMin)}
-                      onTouchStart={() => { setPainting(true); paintCell(hour, tenMin); }}
-                      onTouchMove={e => {
-                        const t = e.touches[0];
-                        const el = document.elementFromPoint(t.clientX, t.clientY);
-                        const cell = el?.closest('[data-cell]');
-                        if (cell) {
-                          const h = parseInt(cell.getAttribute('data-hour') ?? '0');
-                          const m = parseInt(cell.getAttribute('data-min') ?? '0');
-                          paintCell(h, m);
-                        }
-                      }}
-                      data-cell
-                      data-hour={hour}
-                      data-min={tenMin}
-                    >
-                      {mode === 'compare' ? (
-                        // Split cell: top = plan, bottom = actual
-                        <>
-                          <div
-                            className="absolute inset-x-0 top-0 bottom-1/2"
-                            style={{ backgroundColor: planBlock?.color ?? 'transparent' }}
-                          />
-                          <div
-                            className="absolute inset-x-0 top-1/2 bottom-0"
-                            style={{ backgroundColor: actualBlock ? actualBlock.color + 'cc' : 'transparent' }}
-                          />
-                          {/* divider line */}
-                          <div className="absolute inset-x-0 top-1/2 h-px bg-white/50 z-10" />
-                        </>
-                      ) : mode === 'plan' ? (
-                        <div
-                          className="absolute inset-0"
-                          style={{ backgroundColor: planBlock?.color ?? 'transparent' }}
-                        />
-                      ) : (
-                        <div
-                          className="absolute inset-0"
-                          style={{ backgroundColor: actualBlock?.color ?? 'transparent' }}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Activity add modal */}
-      {showActivityModal && (
-        <Modal title="활동 추가" onClose={() => setShowActivityModal(false)}>
-          <div className="flex flex-col gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">활동 이름</label>
-              <input
-                autoFocus
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                value={newActName}
-                onChange={e => setNewActName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addActivity()}
-                placeholder="예: 독서"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">색상</label>
-              <div className="flex gap-2 flex-wrap">
-                {['#6366f1','#8b5cf6','#ec4899','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#ef4444','#14b8a6'].map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setNewActColor(c)}
-                    className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
-                    style={{ backgroundColor: c, borderColor: newActColor === c ? '#1f2937' : 'transparent' }}
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => setShowActivityModal(false)} className="flex-1 py-2 rounded-lg border border-gray-300 text-sm text-gray-600">취소</button>
-              <button onClick={addActivity} className="flex-1 py-2 rounded-lg bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-600">추가</button>
-            </div>
-            {store.activities.length > 0 && (
-              <div className="border-t pt-3">
-                <p className="text-xs text-gray-500 mb-2">등록된 활동</p>
-                <div className="space-y-1">
-                  {store.activities.map(a => (
-                    <div key={a.id} className="flex items-center gap-2 text-sm">
-                      <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: a.color }} />
-                      <span className="flex-1 text-gray-700">{a.name}</span>
-                      <button
-                        onClick={() => { store.deleteActivity(a.id); if (selectedActivity?.id === a.id) setSelectedActivity(store.activities.find(x => x.id !== a.id) ?? null); }}
-                        className="text-gray-400 hover:text-red-500 text-xs"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  ))}
+            {/* Now line */}
+            {showNow && (
+              <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: nowTop }}>
+                <div className="flex items-center">
+                  <div className="w-2 h-2 rounded-full bg-red-500 -ml-1 flex-shrink-0" />
+                  <div className="flex-1 h-px bg-red-400" />
                 </div>
               </div>
             )}
+
+            {/* Blocks */}
+            {mode === 'plan' && planBlocks.map(b => renderBlock(b))}
+            {mode === 'actual' && actualBlocks.map(b => renderBlock(b))}
+            {mode === 'compare' && (
+              <>
+                {planBlocks.map(b => renderBlock(b, 'left'))}
+                {actualBlocks.map(b => renderBlock(b, 'right'))}
+              </>
+            )}
           </div>
+        </div>
+      </div>
+
+      {/* FAB */}
+      <button
+        onClick={() => {
+          setDefaultTime('');
+          setDefaultType(mode === 'actual' ? 'actual' : 'plan');
+          setEditing(null);
+          setShowForm(true);
+        }}
+        className="fixed bottom-20 right-4 w-12 h-12 bg-indigo-500 text-white rounded-full shadow-lg text-2xl flex items-center justify-center hover:bg-indigo-600 z-30"
+      >
+        +
+      </button>
+
+      {showForm && (
+        <Modal
+          title={editing ? '일정 수정' : (defaultType === 'actual' ? '실제 기록 추가' : '계획 추가')}
+          onClose={() => { setShowForm(false); setEditing(null); }}
+        >
+          <ScheduleForm
+            date={ds}
+            initial={editing ?? (defaultTime ? { startTime: defaultTime, scheduleType: defaultType } : { scheduleType: defaultType })}
+            onSave={handleSave}
+            onCancel={() => { setShowForm(false); setEditing(null); }}
+            onDelete={editing ? () => handleDelete(editing.id) : undefined}
+          />
         </Modal>
       )}
     </div>
