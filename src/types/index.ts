@@ -61,12 +61,16 @@ export interface Activity {
 }
 
 export const COLORS = [
-  '#6366f1', // indigo
-  '#8b5cf6', // violet
-  '#ec4899', // pink
-  '#f97316', // orange
-  '#eab308', // yellow
-  '#22c55e', // green
-  '#06b6d4', // cyan
-  '#3b82f6', // blue
+  '#a78bfa', // pastel violet
+  '#f9a8d4', // pastel pink
+  '#fdba74', // pastel orange
+  '#fcd34d', // pastel yellow
+  '#86efac', // pastel green
+  '#67e8f9', // pastel cyan
+  '#93c5fd', // pastel blue
+  '#c4b5fd', // pastel lavender
+  '#f0abfc', // pastel fuchsia
+  '#6ee7b7', // pastel teal
+  '#fca5a5', // pastel red
+  '#d9f99d', // pastel lime
 ];

@@ -13,10 +13,11 @@ export default function ColorPicker({ value, onChange }: Props) {
           key={c}
           type="button"
           onClick={() => onChange(c)}
-          className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
+          className="w-8 h-8 rounded-full transition-all hover:scale-110 shadow-sm"
           style={{
             backgroundColor: c,
-            borderColor: value === c ? '#1f2937' : 'transparent',
+            outline: value === c ? '2.5px solid #6b7280' : '2.5px solid transparent',
+            outlineOffset: '2px',
           }}
         />
       ))}
