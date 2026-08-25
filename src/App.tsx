@@ -4,6 +4,8 @@ import type { Tip, TipInput } from './types';
 import Modal from './components/Modal';
 import TipCard from './components/TipCard';
 import TipForm from './components/TipForm';
+import Hero from './components/Hero';
+import { getCategoryEmoji } from './data/categoryMeta';
 
 const ALL = '전체';
 
@@ -49,6 +51,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+        <Hero />
         <div className="max-w-2xl mx-auto px-4 py-3">
           <h1 className="text-xl font-bold text-blue-700">🎓 서울대 대학원 생활 가이드</h1>
           <p className="text-xs text-gray-500 mt-0.5">신입생을 위한 수강신청·연구·학교생활 팁 모음</p>
@@ -73,7 +76,7 @@ export default function App() {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {cat}
+              {cat === ALL ? '🗂️' : getCategoryEmoji(cat)} {cat}
             </button>
           ))}
         </nav>

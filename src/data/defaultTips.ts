@@ -1,8 +1,34 @@
 import type { Tip } from '../types';
 
-export const CATEGORY_ORDER = ['연구', '대학 생활'];
+export const CATEGORY_ORDER = ['수강신청', '연구', '대학 생활'];
 
 export const DEFAULT_TIPS: Tip[] = [
+  {
+    id: 'default-0',
+    category: '수강신청',
+    title: '수강신청 사이트 & 로그인',
+    content:
+      '수강신청은 mySNU 포털 계정으로 수강신청 사이트(sugang.snu.ac.kr)에 SSO 로그인해서 진행함.\n' +
+      '→ 수강신청 사이트에서 [마이스누 계정으로 로그인] 클릭 → my.snu.ac.kr 로그인 페이지로 이동 → mySNU 아이디/비밀번호 입력\n\n' +
+      '(제가 검색해서 찾은 정보예요 - 최신 절차는 공식 사이트에서 다시 확인해 주세요)',
+    links: [
+      { label: '수강신청 (sugang.snu.ac.kr)', url: 'https://sugang.snu.ac.kr/' },
+      { label: 'mySNU 포털', url: 'https://my.snu.ac.kr/' },
+    ],
+    createdAt: 0,
+  },
+  {
+    id: 'default-0-2',
+    category: '수강신청',
+    title: '수강신청 절차 한눈에',
+    content:
+      '수강편람 조회 → 장바구니 담기 → 예비수강신청 → 선착순 본신청 → 신청 변경/취소, 정원 외 신청 순으로 진행됨.\n' +
+      '대학원은 학과·전공별로 신청 일정이나 방식이 조금씩 다를 수 있으니 학과 홈페이지 공지를 꼭 확인할 것.\n' +
+      '문의: 학사과 02-880-5042\n\n' +
+      '(제가 검색해서 찾은 정보예요 - 최신 절차는 공식 사이트에서 다시 확인해 주세요)',
+    links: [{ label: '수강신청 FAQ', url: 'https://sugang.snu.ac.kr/' }],
+    createdAt: 0.5,
+  },
   {
     id: 'default-1',
     category: '연구',
@@ -12,7 +38,10 @@ export const DEFAULT_TIPS: Tip[] = [
       '→ 교내 인터넷으로 접속 시 도서관 사이트를 거치지 않아도 됨. 외부 접속 시 로그인 후 \'자료 검색 → 학술 DB → RISS\'로 접속\n\n' +
       '해외 논문: Web of Science 활용 (SSCI 검색)\n' +
       '→ 국내 논문과 마찬가지로 외부 접속 시 로그인 후 \'자료 검색 → 학술 DB → Web of Science\'',
-    links: [],
+    links: [
+      { label: 'RISS', url: 'https://www.riss.kr/' },
+      { label: 'DBpia', url: 'https://www.dbpia.co.kr/' },
+    ],
     createdAt: 1,
   },
   {
@@ -22,7 +51,7 @@ export const DEFAULT_TIPS: Tip[] = [
     content:
       '서지 관리, 논문 탐색 방법 등 연구 관련 교육 진행\n' +
       '도서관 홈페이지 로그인 후 \'학술연구지원 → 학술정보 이용교육 → 월별 이용교육 신청\'',
-    links: [],
+    links: [{ label: '서울대 중앙도서관', url: 'https://library.snu.ac.kr/' }],
     createdAt: 2,
   },
   {
@@ -80,9 +109,13 @@ export const DEFAULT_TIPS: Tip[] = [
       '- 제2공학관으로 가는 버스\n' +
       '- 행정관으로 가는 버스\n\n' +
       '대학동 → 서울대 행정관: 커피에반하다 앞 정류장에서 탑승 가능\n\n' +
+      '교내순환 셔틀버스 배차 간격(제가 찾아본 정보, 학기별로 달라질 수 있음)\n' +
+      '- 학기 중: 08:00~19:00 5분 간격, 19:00~21:00 20분 간격\n' +
+      '- 방학 중: 08:00~18:00 10분 간격\n\n' +
       '정확한 시간표와 노선은 아래 링크에서 확인',
     links: [
       { label: '셔틀버스 정류장 안내', url: 'https://www.snu.ac.kr/about/gwanak/shuttles/shuttle_stops' },
+      { label: '교내순환 셔틀버스', url: 'https://www.snu.ac.kr/about/gwanak/shuttles/campus_shuttles' },
     ],
     createdAt: 5,
   },
@@ -111,14 +144,17 @@ export const DEFAULT_TIPS: Tip[] = [
     content:
       '예약하샤\n' +
       '- 교내 시설물 이용 신청\n' +
-      '- 웹사이트로도 접속 가능하며 서울대학교 모바일 어플로도 이용 가능\n\n' +
+      '- mySNU(my.snu.ac.kr) 로그인 후 \'캠퍼스 복지 → 편의시설 → 예약하샤\' 메뉴로 접속, 어플로도 이용 가능\n\n' +
       '비교과관리시스템\n' +
       '- 대부분의 교과 외 프로그램은 비교과관리시스템에서 신청 가능\n' +
       '- 수시로 확인하면서 어떤 프로그램이 개설되었는지 확인하는 것을 추천\n\n' +
       '그 외 본인 전공 관련 학회 사이트\n' +
       '- 관련 학회는 KCI에서 확인할 수 있음\n' +
       '- 논문 투고 공지 또는 학술대회 정보를 수시로 확인하는 것을 추천',
-    links: [],
+    links: [
+      { label: 'mySNU 포털', url: 'https://my.snu.ac.kr/' },
+      { label: '비교과관리시스템', url: 'https://extra.snu.ac.kr/' },
+    ],
     createdAt: 7,
   },
   {

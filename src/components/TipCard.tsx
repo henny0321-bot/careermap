@@ -1,4 +1,5 @@
 import type { Tip } from '../types';
+import { getCategoryEmoji } from '../data/categoryMeta';
 
 interface Props {
   tip: Tip;
@@ -10,7 +11,15 @@ export default function TipCard({ tip, onEdit, onDelete }: Props) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="font-semibold text-gray-900">{tip.title}</h3>
+        <div className="flex items-start gap-2.5">
+          <span className="shrink-0 w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-base">
+            {getCategoryEmoji(tip.category)}
+          </span>
+          <div>
+            <h3 className="font-semibold text-gray-900 leading-tight">{tip.title}</h3>
+            <span className="text-[11px] text-gray-400">{tip.category}</span>
+          </div>
+        </div>
         <div className="flex gap-1 shrink-0">
           <button
             onClick={onEdit}

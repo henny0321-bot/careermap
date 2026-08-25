@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Tip, TipInput } from '../types';
 import { CATEGORY_ORDER, DEFAULT_TIPS } from '../data/defaultTips';
 
-const STORAGE_KEY = 'snu-grad-guide-tips-v1';
+const STORAGE_KEY = 'snu-grad-guide-tips-v2';
 
 function loadTips(): Tip[] {
   try {
